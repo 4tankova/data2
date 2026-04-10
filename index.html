@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Нагадувач важливих дат</title>
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Персональний нагадувач важливих дат з календарем, звуком і PWA." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg2: #020617;
+      --panel: rgba(15, 23, 42, 0.78);
+      --panel-2: rgba(30, 41, 59, 0.9);
+      --border: rgba(255,255,255,0.1);
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #f43f5e;
+      --shadow: 0 16px 36px rgba(0,0,0,0.3);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top, #1e293b 0%, #0f172a 52%, #020617 100%);
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 16px 16px 40px;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 14px 0 6px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      margin: 8px auto 0;
+      color: var(--muted);
+      max-width: 760px;
+      line-height: 1.55;
+      font-size: 15px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0 16px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+      box-shadow: var(--shadow);
+    }
+
+    .btn:hover { transform: translateY(-1px); opacity: 0.96; }
+    .btn:active { transform: translateY(0); }
+    .btn-green { background: var(--success); color: #052e16; }
+    .btn-blue { background: var(--accent); color: #082f49; }
+    .btn-light { background: #e2e8f0; color: #0f172a; }
+    .btn-yellow { background: #fbbf24; color: #111827; }
+
+    .status, .alert-box, .panel {
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .status {
+      background: rgba(255,255,255,0.06);
+      border-radius: 18px;
+      text-align: center;
+      padding: 14px 16px;
+      color: #fde68a;
+      margin-bottom: 16px;
+    }
+
+    .alert-box {
+      display: none;
+      background: linear-gradient(135deg, #facc15, #f59e0b);
+      color: #1f2937;
+      border-radius: 18px;
+      padding: 16px;
+      font-weight: 700;
+      line-height: 1.55;
+      margin-bottom: 16px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border-radius: 22px;
+      padding: 18px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 21px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .summary-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .summary-card strong {
+      display: block;
+      font-size: 28px;
+      margin-bottom: 6px;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .event-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .event-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-left: 6px solid var(--accent);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .event-card.today { border-left-color: var(--danger); background: rgba(244, 63, 94, 0.12); }
+    .event-card.tomorrow { border-left-color: var(--warning); background: rgba(245, 158, 11, 0.12); }
+    .event-card.twodays { border-left-color: var(--success); background: rgba(34, 197, 94, 0.12); }
+
+    .event-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.42;
+      margin-bottom: 8px;
+    }
+
+    .event-meta {
+      color: #dbeafe;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .badge.today { background: var(--danger); color: #fff; }
+    .badge.tomorrow { background: #fbbf24; color: #111827; }
+    .badge.twodays { background: #4ade80; color: #052e16; }
+
+    .empty, .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .calendar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .calendar-nav {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .mini-btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+
+    .weekday, .day-cell {
+      text-align: center;
+      border-radius: 14px;
+    }
+
+    .weekday {
+      padding: 8px 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .day-cell {
+      min-height: 76px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      padding: 8px 6px;
+      position: relative;
+    }
+
+    .day-cell.other-month {
+      opacity: 0.35;
+    }
+
+    .day-cell.has-event {
+      outline: 1px solid rgba(56, 189, 248, 0.5);
+    }
+
+    .day-cell.today-cell {
+      background: rgba(244, 63, 94, 0.2);
+      outline: 1px solid rgba(244, 63, 94, 0.6);
+    }
+
+    .day-num {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .dot-wrap {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .dot.today { background: var(--danger); }
+    .dot.tomorrow { background: var(--warning); }
+    .dot.twodays { background: var(--success); }
+
+    .footer {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+      text-align: center;
+    }
+
+    code.inline {
+      background: rgba(255,255,255,0.08);
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 780px) {
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .toolbar { flex-direction: column; }
+      .btn { width: 100%; }
+      .day-cell { min-height: 62px; padding: 6px 4px; }
+      .hero h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <h1>Нагадувач важливих дат</h1>
+      <p>
+        PWA-додаток з календарем, нагадуваннями за 2 дні, за 1 день і в день події,
+        звуковим сигналом та підготовкою під Firebase push.
+      </p>
+    </section>
+
+    <section class="toolbar">
+      <button class="btn btn-green" id="enableNotificationsBtn">Увімкнути сповіщення</button>
+      <button class="btn btn-blue" id="checkNowBtn">Перевірити зараз</button>
+      <button class="btn btn-light" id="testSoundBtn">Перевірити звук</button>
+      <button class="btn btn-yellow" id="installBtn" hidden>Встановити додаток</button>
+    </section>
+
+    <section class="status" id="statusText">
+      Статус: відкрий сайт, дозволь сповіщення і за бажанням встанови його як додаток
+    </section>
+
+    <section class="alert-box" id="alertBox"></section>
+
+    <section class="panel" style="margin-bottom:16px;">
+      <div class="summary">
+        <div class="summary-card">
+          <strong id="todayCount">0</strong>
+          <span>сьогодні</span>
+        </div>
+        <div class="summary-card">
+          <strong id="tomorrowCount">0</strong>
+          <span>завтра</span>
+        </div>
+        <div class="summary-card">
+          <strong id="twoDaysCount">0</strong>
+          <span>через 2 дні</span>
+        </div>
+        <div class="summary-card">
+          <strong id="monthCount">0</strong>
+          <span>цього місяця</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="layout">
+      <div class="stack">
+        <section class="panel">
+          <h2>Термінові нагадування</h2>
+          <div id="urgentEvents" class="event-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Найближчі події</h2>
+          <div id="upcomingEvents" class="event-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Усі події</h2>
+          <div id="allEvents" class="event-list"></div>
+          <div class="hint" style="margin-top: 12px;">
+            Для реального push при закритому сайті заповни файл <code class="inline">firebase-config.js</code>
+            своїми даними Firebase. Без цього працюють локальні сповіщення в браузері/PWA.
+          </div>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="panel">
+          <div class="calendar-head">
+            <h2 style="margin:0;">Календар</h2>
+            <div class="calendar-nav">
+              <button class="mini-btn" id="prevMonthBtn">←</button>
+              <strong id="calendarTitle"></strong>
+              <button class="mini-btn" id="nextMonthBtn">→</button>
+            </div>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+          <div class="hint" style="margin-top: 12px;">
+            Точки в календарі показують дні, на які є події. Червона — сьогодні, жовта — завтра, зелена — через 2 дні.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Firebase push</h2>
+          <div class="hint">
+            1. Створи проєкт Firebase.<br>
+            2. Увімкни Cloud Messaging.<br>
+            3. Заповни <code class="inline">firebase-config.js</code>.<br>
+            4. Додай свій VAPID key у код.<br>
+            5. Після цього кнопка сповіщень зможе реєструвати реальний web push.<br><br>
+            Для надсилання push у визначені дати все одно потрібен сервер або Cloud Function.
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="footer">
+      На iPhone додай сайт на екран додому через Safari. На Android у Chrome натисни «Встановити додаток».
+    </div>
+  </main>
+
+  <script src="firebase-config.js"></script>
+  <script type="module">
+    const baseEvents = [
+      { title: "131 окремий розвідувальний батальйон імені полковника Євгена Коновальця (А1445)", day: 1, month: 4, startYear: 2015 },
+      { title: "День створення НАТО", day: 4, month: 4 },
+      { title: "67 окрема механізована бригада (А4123)", day: 5, month: 4 },
+      { title: "День фахівців топографічної служби ЗСУ", day: 8, month: 4 },
+      { title: "День працівників ТЦК та СП", day: 8, month: 4 },
+      { title: "День працівників ракетно-космічної галузі України", day: 12, month: 4 },
+      { title: "День працівника оборонно-промислового комплексу України", day: 13, month: 4 },
+      { title: "241 окрема бригада територіальної оборони (А4076)", day: 14, month: 4, startYear: 2022 },
+      { title: "Річниця початку АТО", day: 14, month: 4 },
+      { title: "8 прикордонний загін (1491)", day: 15, month: 4, startYear: 2001 },
+      { title: "65 окрема механізована бригада \"Великий луг\" (А7013)", day: 16, month: 4, startYear: 2022 },
+      { title: "День Військової служби правопорядку ЗСУ", day: 19, month: 4 },
+      { title: "39 окремий батальйон безпілотних систем (А4047)", day: 19, month: 4, startYear: 2022 },
+      { title: "1513 артилерійський склад боєприпасів (А1319)", day: 20, month: 4, startYear: 1978 },
+      { title: "Всеукраїнський день психолога", day: 23, month: 4 },
+      { title: "День Чорнобильської трагедії", day: 26, month: 4 },
+      { title: "94 окремий протитанковий батальйон (А5013)", day: 29, month: 4, startYear: 2024 },
+      { title: "День прикордонника України", day: 30, month: 4 },
+      { title: "23 центр забезпечення охорони державної таємниці (А1629)", day: 30, month: 4, startYear: 2015 },
+      { title: "66 пункт управління системою зв’язку та інформаційними системами", day: 30, month: 4, startYear: 2015 },
+      { title: "16 окрема бригада підтримки (А2558)", day: 30, month: 4, startYear: 2018 }
+    ];
+
+    const statusText = document.getElementById("statusText");
+    const alertBox = document.getElementById("alertBox");
+    const urgentEventsEl = document.getElementById("urgentEvents");
+    const upcomingEventsEl = document.getElementById("upcomingEvents");
+    const allEventsEl = document.getElementById("allEvents");
+    const todayCountEl = document.getElementById("todayCount");
+    const tomorrowCountEl = document.getElementById("tomorrowCount");
+    const twoDaysCountEl = document.getElementById("twoDaysCount");
+    const monthCountEl = document.getElementById("monthCount");
+    const calendarGridEl = document.getElementById("calendarGrid");
+    const calendarTitleEl = document.getElementById("calendarTitle");
+    const installBtn = document.getElementById("installBtn");
+
+    const ukrainianMonths = [
+      "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
+      "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"
+    ];
+    const weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
+
+    let deferredPrompt = null;
+    let currentCalendarDate = new Date();
+
+    function pad(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function startOfDay(date) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    function formatDate(day, month) {
+      return `${pad(day)}.${pad(month)}`;
+    }
+
+    function getOrthodoxEaster(year) {
+      const a = year % 4;
+      const b = year % 7;
+      const c = year % 19;
+      const d = (19 * c + 15) % 30;
+      const e = (2 * a + 4 * b - d + 34) % 7;
+      const month = Math.floor((d + e + 114) / 31);
+      const day = ((d + e + 114) % 31) + 1;
+      const julianDate = new Date(Date.UTC(year, month - 1, day));
+      julianDate.setUTCDate(julianDate.getUTCDate() + 13);
+      return {
+        day: julianDate.getUTCDate(),
+        month: julianDate.getUTCMonth() + 1,
+        year
+      };
+    }
+
+    function getEvents() {
+      const year = new Date().getFullYear();
+      const easter = getOrthodoxEaster(year);
+      return [
+        ...baseEvents,
+        { title: "Великдень", day: easter.day, month: easter.month, dynamicYear: year }
+      ];
+    }
+
+    function getNextOccurrence(event) {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      let targetYear = event.dynamicYear || currentYear;
+      let eventDate = new Date(targetYear, event.month - 1, event.day);
+
+      if (!event.dynamicYear && startOfDay(eventDate) < startOfDay(now)) {
+        eventDate = new Date(currentYear + 1, event.month - 1, event.day);
+      }
+
+      if (event.dynamicYear && startOfDay(eventDate) < startOfDay(now)) {
+        const nextEaster = getOrthodoxEaster(currentYear + 1);
+        if (event.title === "Великдень") {
+          eventDate = new Date(currentYear + 1, nextEaster.month - 1, nextEaster.day);
+        }
+      }
+
+      return eventDate;
+    }
+
+    function daysBetween(from, to) {
+      const oneDay = 1000 * 60 * 60 * 24;
+      return Math.round((startOfDay(to) - startOfDay(from)) / oneDay);
+    }
+
+    function getAnniversary(event, occurrenceYear) {
+      if (!event.startYear) return null;
+      return occurrenceYear - event.startYear;
+    }
+
+    function getSortedEvents() {
+      const now = new Date();
+      return getEvents()
+        .map((event) => {
+          const nextDate = getNextOccurrence(event);
+          const diffDays = daysBetween(now, nextDate);
+          const anniversary = getAnniversary(event, nextDate.getFullYear());
+          return { ...event, nextDate, diffDays, anniversary };
+        })
+        .sort((a, b) => a.nextDate - b.nextDate || a.title.localeCompare(b.title, "uk"));
+    }
+
+    function getReminderState(diffDays) {
+      if (diffDays === 0) return "today";
+      if (diffDays === 1) return "tomorrow";
+      if (diffDays === 2) return "twodays";
+      return "";
+    }
+
+    function getBadgeText(diffDays) {
+      if (diffDays === 0) return "Сьогодні";
+      if (diffDays === 1) return "Завтра";
+      if (diffDays === 2) return "Через 2 дні";
+      return `Через ${diffDays} дн.`;
+    }
+
+    function renderEventCard(event) {
+      const state = getReminderState(event.diffDays);
+      const anniversaryLine = event.anniversary !== null && event.anniversary >= 0
+        ? `<br><strong>Річниця:</strong> ${event.anniversary}`
+        : "";
+
+      return `
+        <div class="event-card ${state}">
+          <div class="event-title">${event.title}</div>
+          <div class="event-meta">
+            <strong>Дата:</strong> ${formatDate(event.day, event.month)}
+            ${anniversaryLine}
+            <br><strong>Залишилось:</strong> ${event.diffDays} дн.
+          </div>
+          <span class="badge ${state}">${getBadgeText(event.diffDays)}</span>
+        </div>
+      `;
+    }
+
+    function renderLists(sortedEvents) {
+      const urgent = sortedEvents.filter((event) => [0, 1, 2].includes(event.diffDays));
+      const upcoming = sortedEvents.filter((event) => event.diffDays <= 45).slice(0, 12);
+
+      urgentEventsEl.innerHTML = urgent.length
+        ? urgent.map(renderEventCard).join("")
+        : '<div class="empty">Немає термінових нагадувань.</div>';
+
+      upcomingEventsEl.innerHTML = upcoming.length
+        ? upcoming.map(renderEventCard).join("")
+        : '<div class="empty">Немає найближчих подій.</div>';
+
+      allEventsEl.innerHTML = sortedEvents.map(renderEventCard).join("");
+    }
+
+    function updateCounters(sortedEvents) {
+      const now = new Date();
+      const month = now.getMonth();
+      todayCountEl.textContent = String(sortedEvents.filter((e) => e.diffDays === 0).length);
+      tomorrowCountEl.textContent = String(sortedEvents.filter((e) => e.diffDays === 1).length);
+      twoDaysCountEl.textContent = String(sortedEvents.filter((e) => e.diffDays === 2).length);
+      monthCountEl.textContent = String(getEvents().filter((e) => e.month - 1 === month).length);
+    }
+
+    function showAlert(messages) {
+      if (!messages.length) {
+        alertBox.style.display = "none";
+        alertBox.innerHTML = "";
+        return;
+      }
+      alertBox.style.display = "block";
+      alertBox.innerHTML = messages.join("<br><br>");
+    }
+
+    function playBeep() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+
+        for (let i = 0; i < 2; i++) {
+          const oscillator = ctx.createOscillator();
+          const gain = ctx.createGain();
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(920, ctx.currentTime + i * 0.5);
+          oscillator.connect(gain);
+          gain.connect(ctx.destination);
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.5);
+          gain.gain.exponentialRampToValueAtTime(0.28, ctx.currentTime + i * 0.5 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.5 + 0.38);
+          oscillator.start(ctx.currentTime + i * 0.5);
+          oscillator.stop(ctx.currentTime + i * 0.5 + 0.38);
+        }
+      } catch (error) {
+        console.log("Не вдалося відтворити звук:", error);
+      }
+    }
+
+    function updateNotificationStatusText() {
+      if (!("Notification" in window)) {
+        statusText.textContent = "Статус: цей браузер не підтримує сповіщення";
+        return;
+      }
+      if (Notification.permission === "granted") {
+        statusText.textContent = "Статус: сповіщення дозволені";
+      } else if (Notification.permission === "denied") {
+        statusText.textContent = "Статус: сповіщення заблоковані";
+      } else {
+        statusText.textContent = "Статус: очікується дозвіл на сповіщення";
+      }
+    }
+
+    function getNotificationDayKey() {
+      const now = new Date();
+      return `notified_${now.getFullYear()}_${now.getMonth() + 1}_${now.getDate()}`;
+    }
+
+    async function enableNotifications() {
+      if (!("Notification" in window)) {
+        updateNotificationStatusText();
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      updateNotificationStatusText();
+      if (permission === "granted") {
+        new Notification("Нагадувач увімкнено", {
+          body: "Додаток може показувати нагадування про важливі дати."
+        });
+      }
+      await tryInitFirebaseMessaging();
+    }
+
+    function sendNotification(title, body) {
+      if (!("Notification" in window)) return;
+      if (Notification.permission !== "granted") return;
+      new Notification(title, { body, icon: "icon-192.png", badge: "icon-192.png" });
+    }
+
+    function buildReminderText(event) {
+      const prefix = event.diffDays === 0 ? "Сьогодні" : event.diffDays === 1 ? "Завтра" : "Через 2 дні";
+      const anniversaryText = event.anniversary !== null && event.anniversary >= 0
+        ? ` (${event.anniversary}-а річниця)`
+        : "";
+      return `${prefix}: ${event.title}${anniversaryText} — ${formatDate(event.day, event.month)}`;
+    }
+
+    function checkEvents(forceNotify = false) {
+      const sortedEvents = getSortedEvents();
+      renderLists(sortedEvents);
+      updateCounters(sortedEvents);
+      renderCalendar();
+
+      const urgent = sortedEvents.filter((event) => [0, 1, 2].includes(event.diffDays));
+      const messages = urgent.map(buildReminderText);
+      showAlert(messages);
+
+      if (!urgent.length) {
+        statusText.textContent = "Статус: немає нагадувань на сьогодні, завтра або через 2 дні";
+        return;
+      }
+
+      const notificationKey = getNotificationDayKey();
+      const alreadyNotified = localStorage.getItem(notificationKey);
+
+      if (Notification.permission === "granted" && (forceNotify || !alreadyNotified)) {
+        urgent.forEach((event) => {
+          const body = event.diffDays === 0
+            ? `Подія сьогодні: ${formatDate(event.day, event.month)}`
+            : event.diffDays === 1
+              ? `Подія вже завтра: ${formatDate(event.day, event.month)}`
+              : `Подія буде через 2 дні: ${formatDate(event.day, event.month)}`;
+          sendNotification(event.title, body);
+        });
+        playBeep();
+        localStorage.setItem(notificationKey, "1");
+      }
+
+      statusText.textContent = `Статус: знайдено ${urgent.length} активних нагадування(нь)`;
+    }
+
+    function renderCalendar() {
+      const year = currentCalendarDate.getFullYear();
+      const month = currentCalendarDate.getMonth();
+      calendarTitleEl.textContent = `${ukrainianMonths[month]} ${year}`;
+
+      const monthEvents = getEvents().filter((event) => event.month - 1 === month);
+      const today = startOfDay(new Date());
+      const firstDay = new Date(year, month, 1);
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const prevMonthDays = new Date(year, month, 0).getDate();
+      const firstWeekday = (firstDay.getDay() + 6) % 7;
+
+      const cells = [];
+      weekdays.forEach((dayName) => {
+        cells.push(`<div class="weekday">${dayName}</div>`);
+      });
+
+      for (let i = 0; i < firstWeekday; i++) {
+        const day = prevMonthDays - firstWeekday + i + 1;
+        cells.push(`<div class="day-cell other-month"><div class="day-num">${day}</div></div>`);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cellDate = new Date(year, month, day);
+        const cellEvents = monthEvents.filter((event) => event.day === day);
+        const diffDays = daysBetween(new Date(), cellDate);
+        const state = diffDays === 0 ? "today" : diffDays === 1 ? "tomorrow" : diffDays === 2 ? "twodays" : "";
+        const isToday = startOfDay(cellDate).getTime() === today.getTime();
+        const dots = cellEvents.slice(0, 4).map(() => `<span class="dot ${state}"></span>`).join("");
+
+        cells.push(`
+          <div class="day-cell ${cellEvents.length ? 'has-event' : ''} ${isToday ? 'today-cell' : ''}" title="${cellEvents.map(e => e.title).join(' • ')}">
+            <div class="day-num">${day}</div>
+            <div class="dot-wrap">${dots}</div>
+          </div>
+        `);
+      }
+
+      const totalCells = weekdays.length + firstWeekday + daysInMonth;
+      const trailing = (7 - (totalCells % 7)) % 7;
+      for (let i = 1; i <= trailing; i++) {
+        cells.push(`<div class="day-cell other-month"><div class="day-num">${i}</div></div>`);
+      }
+
+      calendarGridEl.innerHTML = cells.join("");
+    }
+
+    document.getElementById("enableNotificationsBtn").addEventListener("click", enableNotifications);
+    document.getElementById("checkNowBtn").addEventListener("click", () => {
+      localStorage.removeItem(getNotificationDayKey());
+      checkEvents(true);
+    });
+    document.getElementById("testSoundBtn").addEventListener("click", playBeep);
+    document.getElementById("prevMonthBtn").addEventListener("click", () => {
+      currentCalendarDate = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1);
+      renderCalendar();
+    });
+    document.getElementById("nextMonthBtn").addEventListener("click", () => {
+      currentCalendarDate = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1);
+      renderCalendar();
+    });
+
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredPrompt = event;
+      installBtn.hidden = false;
+    });
+
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.hidden = true;
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkEvents(false);
+    });
+
+    window.addEventListener("focus", () => checkEvents(false));
+    window.addEventListener("load", () => setTimeout(() => checkEvents(false), 800));
+
+    updateNotificationStatusText();
+    checkEvents(false);
+    setInterval(() => checkEvents(false), 60000);
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
+        try {
+          await navigator.serviceWorker.register("./service-worker.js");
+          console.log("Service Worker зареєстровано");
+        } catch (error) {
+          console.log("Помилка реєстрації Service Worker:", error);
+        }
+      });
+    }
+
+    async function tryInitFirebaseMessaging() {
+      if (!window.FIREBASE_CONFIG || !window.FIREBASE_CONFIG.apiKey || !window.FIREBASE_VAPID_KEY) {
+        return;
+      }
+
+      try {
+        const [{ initializeApp }, { getMessaging, getToken, onMessage }] = await Promise.all([
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js')
+        ]);
+
+        const app = initializeApp(window.FIREBASE_CONFIG);
+        const messaging = getMessaging(app);
+
+        const token = await getToken(messaging, {
+          vapidKey: window.FIREBASE_VAPID_KEY,
+          serviceWorkerRegistration: await navigator.serviceWorker.register('./firebase-messaging-sw.js')
+        });
+
+        if (token) {
+          console.log('FCM token:', token);
+          localStorage.setItem('fcm_token', token);
+        }
+
+        onMessage(messaging, (payload) => {
+          console.log('Foreground push:', payload);
+          if (payload?.notification?.title) {
+            sendNotification(payload.notification.title, payload.notification.body || '');
+            playBeep();
+          }
+        });
+      } catch (error) {
+        console.log('Firebase Messaging не ініціалізовано:', error);
+      }
+    }
+
+    tryInitFirebaseMessaging();
+  </script>
+</body>
+</html>
